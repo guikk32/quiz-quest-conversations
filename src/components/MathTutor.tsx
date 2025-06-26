@@ -7,12 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { generateEquation, checkAnswer, getHint } from "@/utils/equationGenerator";
 import ConversationInterface from "./ConversationInterface";
 import PointsDisplay from "./PointsDisplay";
+import ChatInterface from "./ChatInterface";
 import { Trophy, Lightbulb, RefreshCw } from "lucide-react";
 
 interface Equation {
   equation: string;
   answer: number;
   variable: string;
+  steps: string[];
 }
 
 const MathTutor = () => {
@@ -26,7 +28,7 @@ const MathTutor = () => {
 
   useEffect(() => {
     generateNewEquation();
-    addSystemMessage("Welcome to Math Tutor! I'll help you solve first-degree equations. Let's start with your first problem!");
+    addSystemMessage("Hi! I'm your Math Tutor! 🎓 I'm here to help you master first-degree equations. You can ask me questions, request hints, or just chat about math. Let's start with your first problem!");
   }, []);
 
   const generateNewEquation = () => {
@@ -35,7 +37,7 @@ const MathTutor = () => {
     setUserAnswer("");
     setHintsUsed(0);
     setIsCorrect(null);
-    addSystemMessage(`Solve for ${equation.variable}: ${equation.equation}`);
+    addSystemMessage(`Here's your next equation to solve: **${equation.equation}**\n\nFind the value of ${equation.variable}. You can type your answer or ask me for help!`);
   };
 
   const addSystemMessage = (content: string) => {
@@ -50,11 +52,45 @@ const MathTutor = () => {
     setMessages(prev => [...prev, { type: 'hint', content, timestamp: new Date() }]);
   };
 
-  const handleSubmitAnswer = () => {
-    if (!currentEquation || !userAnswer.trim()) return;
+  const handleChatMessage = (message: string) => {
+    addUserMessage(message);
+    
+    // Check if it's a number (answer attempt)
+    const numericValue = parseFloat(message);
+    if (!isNaN(numericValue) && currentEquation) {
+      handleAnswerSubmission(numericValue);
+      return;
+    }
 
-    const numericAnswer = parseFloat(userAnswer);
-    addUserMessage(`My answer: ${userAnswer}`);
+    // Handle conversational inputs
+    const lowerMessage = message.toLowerCase();
+    
+    if (lowerMessage.includes('hint') || lowerMessage.includes('help') || lowerMessage.includes('stuck')) {
+      handleAskForHint();
+    } else if (lowerMessage.includes('new') || lowerMessage.includes('next') || lowerMessage.includes('skip')) {
+      addSystemMessage("Getting you a new problem! 🔄");
+      setTimeout(generateNewEquation, 1000);
+    } else if (lowerMessage.includes('explain') || lowerMessage.includes('how')) {
+      if (currentEquation) {
+        addSystemMessage(`Let me explain how to solve ${currentEquation.equation}:\n\n${currentEquation.steps.join('\n')}\n\nThis gives us ${currentEquation.variable} = ${currentEquation.answer}`);
+      }
+    } else if (lowerMessage.includes('points') || lowerMessage.includes('score')) {
+      addSystemMessage(`You currently have ${points} points and a streak of ${streak}! 🏆\n\nKeep solving correctly to earn more points and maintain your streak!`);
+    } else {
+      // General conversational responses
+      const responses = [
+        "I'm here to help you with math! Try giving me your answer to the current equation, or ask for a hint! 😊",
+        "Feel free to ask me for hints, explanations, or just type your answer to the equation! 📚",
+        "I love helping with math! What would you like to know about solving this equation? 🤔",
+        "You can type your numerical answer or ask me questions about the problem! 💭"
+      ];
+      const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+      addSystemMessage(randomResponse);
+    }
+  };
+
+  const handleAnswerSubmission = (numericAnswer: number) => {
+    if (!currentEquation) return;
 
     if (checkAnswer(numericAnswer, currentEquation.answer)) {
       setIsCorrect(true);
@@ -66,24 +102,32 @@ const MathTutor = () => {
       setPoints(prev => prev + totalPoints);
       setStreak(prev => prev + 1);
       
-      let message = `🎉 Correct! You earned ${totalPoints} points!`;
+      let message = `🎉 Excellent! That's correct! You earned ${totalPoints} points!`;
       if (bonusPoints > 0) message += ` (+${bonusPoints} bonus for minimal hints)`;
       if (streakBonus > 0) message += ` (+${streakBonus} streak bonus)`;
+      message += `\n\nGreat job! Ready for the next challenge? 🚀`;
       
       addSystemMessage(message);
       
       setTimeout(() => {
         generateNewEquation();
-      }, 2000);
+      }, 3000);
     } else {
       setIsCorrect(false);
       setStreak(0);
-      addSystemMessage(`❌ Not quite right. The correct answer is ${currentEquation.variable} = ${currentEquation.answer}. Try asking for a hint next time!`);
+      addSystemMessage(`❌ Not quite right. The correct answer is ${currentEquation.variable} = ${currentEquation.answer}.\n\nDon't worry! Learning from mistakes is part of the process. Try asking for hints on the next problem! 💪`);
       
       setTimeout(() => {
         generateNewEquation();
-      }, 3000);
+      }, 4000);
     }
+  };
+
+  const handleSubmitAnswer = () => {
+    if (!currentEquation || !userAnswer.trim()) return;
+    const numericAnswer = parseFloat(userAnswer);
+    addUserMessage(`My answer: ${userAnswer}`);
+    handleAnswerSubmission(numericAnswer);
   };
 
   const handleAskForHint = () => {
@@ -91,7 +135,7 @@ const MathTutor = () => {
     
     const hint = getHint(currentEquation, hintsUsed);
     setHintsUsed(prev => prev + 1);
-    addHintMessage(`💡 Hint: ${hint}`);
+    addHintMessage(`💡 ${hint}`);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -184,7 +228,10 @@ const MathTutor = () => {
             </CardContent>
           </Card>
 
-          <ConversationInterface messages={messages} />
+          <ChatInterface 
+            messages={messages}
+            onSendMessage={handleChatMessage}
+          />
         </div>
 
         <div className="space-y-6">
@@ -192,24 +239,24 @@ const MathTutor = () => {
           
           <Card>
             <CardHeader>
-              <CardTitle>Tips for Success</CardTitle>
+              <CardTitle>How to Chat with Me</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <div className="flex items-start gap-2">
-                <Badge variant="secondary">1</Badge>
-                <span>Isolate the variable by performing the same operation on both sides</span>
+                <Badge variant="secondary">💬</Badge>
+                <span>Type your numerical answer to submit it</span>
               </div>
               <div className="flex items-start gap-2">
-                <Badge variant="secondary">2</Badge>
-                <span>Work backwards from the order of operations</span>
+                <Badge variant="secondary">💡</Badge>
+                <span>Ask for "hint" or "help" when you're stuck</span>
               </div>
               <div className="flex items-start gap-2">
-                <Badge variant="secondary">3</Badge>
-                <span>Use hints wisely - you get bonus points for solving with fewer hints!</span>
+                <Badge variant="secondary">📚</Badge>
+                <span>Say "explain" to see the step-by-step solution</span>
               </div>
               <div className="flex items-start gap-2">
-                <Badge variant="secondary">4</Badge>
-                <span>Build a streak for bonus points!</span>
+                <Badge variant="secondary">🔄</Badge>
+                <span>Type "new problem" to get a fresh equation</span>
               </div>
             </CardContent>
           </Card>
