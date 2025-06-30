@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageCircle, Bot, User, Lightbulb, Send, Loader2 } from "lucide-react";
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 
 interface Message {
-  type: 'system' | 'user' | 'hint' | 'error';
+  type: 'system' | 'user' | 'hint' | 'error' | 'explain_step' | 'solve_equation';
   content: string;
   timestamp: Date;
 }
@@ -54,6 +56,10 @@ const ChatInterface = ({ messages, onSendMessage, isLoading }: ChatInterfaceProp
         return <User className="h-4 w-4 text-green-600" />;
       case 'hint':
         return <Lightbulb className="h-4 w-4 text-yellow-600" />;
+      case 'explain_step':
+        return <MessageCircle className="h-4 w-4 text-purple-600" />;
+      case 'solve_equation':
+        return <MessageCircle className="h-4 w-4 text-red-600" />;
       case 'error':
         return <MessageCircle className="h-4 w-4 text-red-600" />;
       default:
@@ -69,6 +75,10 @@ const ChatInterface = ({ messages, onSendMessage, isLoading }: ChatInterfaceProp
         return 'bg-green-50 border-green-200 text-green-800 ml-8';
       case 'hint':
         return 'bg-yellow-50 border-yellow-200 text-yellow-800';
+      case 'explain_step':
+        return 'bg-purple-50 border-purple-200 text-purple-800';
+      case 'solve_equation':
+        return 'bg-red-50 border-red-200 text-red-800';
       case 'error':
         return 'bg-red-50 border-red-200 text-red-800';
       default:
@@ -76,12 +86,25 @@ const ChatInterface = ({ messages, onSendMessage, isLoading }: ChatInterfaceProp
     }
   };
 
-  const formatMessageContent = (content: string) => {
+  const formatMessageContent = (message: Message) => {
+    let formattedContent = message.content;
+
     // Convert **bold** to actual bold text
-    const boldFormatted = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    // Convert line breaks to <br> tags
-    const lineBreakFormatted = boldFormatted.replace(/\n/g, '<br>');
-    return lineBreakFormatted;
+    formattedContent = formattedContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+    // Render LaTeX for specific message types
+    if (message.type === 'explain_step' || message.type === 'solve_equation') {
+      try {
+        return <span dangerouslySetInnerHTML={{ __html: katex.renderToString(formattedContent, { throwOnError: false, displayMode: true }) }} />;
+      } catch (e) {
+        console.error("KaTeX rendering error:", e);
+        // Fallback to plain text if KaTeX rendering fails
+        return <span dangerouslySetInnerHTML={{ __html: formattedContent.replace(/\n/g, '<br>') }} />;
+      }
+    } else {
+      // Convert line breaks to <br> tags for other message types
+      return <span dangerouslySetInnerHTML={{ __html: formattedContent.replace(/\n/g, '<br>') }} />;
+    }
   };
 
   return (
@@ -108,8 +131,8 @@ const ChatInterface = ({ messages, onSendMessage, isLoading }: ChatInterfaceProp
                        message.type === 'user' ? 'You' : 'Hint'}
                     </p>
                     <div 
-                      className="text-sm mt-1" 
-                      dangerouslySetInnerHTML={{ __html: formatMessageContent(message.content) }}
+                      className="text-sm mt-1 whitespace-pre-wrap" 
+                      dangerouslySetInnerHTML={{ __html: formatMessageContent(message) }}
                     />
                     <p className="text-xs opacity-60 mt-1">
                       {message.timestamp.toLocaleTimeString()}
@@ -143,7 +166,7 @@ const ChatInterface = ({ messages, onSendMessage, isLoading }: ChatInterfaceProp
         </div>
 
         <div className="text-xs text-gray-500 text-center">
-          💡 Experimente digitar: "/solve 2x + 3 = 7", "/explain 2x + 3 = 7", "dica", "novo problema" ou apenas sua resposta numérica!
+          💡 Experimente digitar: "/solve 2x + 3 = 7", "/explain 2x + 3 = 7", "dica", "ajuda", "preso" ou apenas sua resposta numérica!
         </div>
       </CardContent>
     </Card>

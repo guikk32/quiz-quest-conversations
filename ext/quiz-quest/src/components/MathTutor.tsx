@@ -23,7 +23,7 @@ const MathTutor = () => {
   const [points, setPoints] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   
-  const [messages, setMessages] = useState<Array<{type: 'system' | 'user' | 'hint', content: string, timestamp: Date}>>([]);
+  const [messages, setMessages] = useState<Array<{type: 'system' | 'user' | 'hint' | 'explain_step' | 'solve_equation' | 'error', content: string, timestamp: Date}>>([]);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [streak, setStreak] = useState(0);
 
@@ -38,7 +38,7 @@ const MathTutor = () => {
       const equation = response.data;
       setCurrentEquation(equation);
       setUserAnswer("");
-      setHintsUsed(0);
+      
       setIsCorrect(null);
       addSystemMessage(`Aqui está sua próxima equação para resolver: **${equation.equation}**\n\nEncontre o valor de ${equation.variable}. Você pode digitar sua resposta ou me pedir ajuda!`);
     } catch (error) {
@@ -67,23 +67,12 @@ const MathTutor = () => {
     setMessages(prev => [...prev, { type: 'error', content, timestamp: new Date() }]);
   };
 
-  const handleSolveEquation = async (userMessage: string) => {
-    setIsLoading(true);
-    addSystemMessage("Pensando...");
-    try {
-      const response = await axios.post('http://localhost:8000/solve_equation', { user_message: userMessage });
-      addSystemMessage(`Aqui está a solução: ${response.data.solution}`);
-    } catch (error) {
-      console.error("Error solving equation:", error);
-      addErrorMessage("Desculpe, não consegui resolver essa equação. Por favor, tente novamente ou forneça uma diferente.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  
 
   const handleChatMessage = async (message: string) => {
     console.log("handleChatMessage called with:", message);
     addUserMessage(message);
+
     
     // Check if it's a number (answer attempt)
     const numericValue = parseFloat(message);
@@ -92,40 +81,27 @@ const MathTutor = () => {
       return;
     }
 
-    // Handle conversational inputs
-    const lowerMessage = message.toLowerCase();
-    
-    if (lowerMessage.startsWith('/solve') || lowerMessage.startsWith('/explain')) {
-      const equationMessage = message.substring(message.indexOf(' ') + 1);
-      if (equationMessage) {
-        setIsLoading(true);
-        await handleSolveEquation(equationMessage);
-        setIsLoading(false);
+    setIsLoading(true);
+    addSystemMessage("Pensando...");
+    try {
+      const response = await axios.post('http://localhost:8000/solve_equation', { user_message: message });
+      const solutionContent = response.data.solution;
+      const intent = response.data.intent;
+
+      if (intent === "HINT") {
+        addHintMessage(`💡 ${solutionContent}`);
+      } else if (intent === "EXPLAIN_STEP") {
+        setMessages(prev => [...prev, { type: 'explain_step', content: solutionContent, timestamp: new Date() }]);
+      } else if (intent === "SOLVE_EQUATION") {
+        setMessages(prev => [...prev, { type: 'solve_equation', content: solutionContent, timestamp: new Date() }]);
       } else {
-        addSystemMessage("Por favor, forneça uma equação após /solve ou /explain. Ex: /solve 2x + 3 = 7");
+        addSystemMessage(`${solutionContent}`);
       }
-    } else if (lowerMessage.includes('hint') || lowerMessage.includes('help') || lowerMessage.includes('stuck')) {
-      setIsLoading(true);
-      addSystemMessage("Pensando em uma dica...");
-      try {
-        const response = await axios.post('http://localhost:8000/solve_equation', { user_message: `Me dê uma dica para resolver a equação ${currentEquation?.equation}` });
-        addHintMessage(`💡 ${response.data.solution}`);
-      } catch (error) {
-        console.error("Error getting hint:", error);
-        addErrorMessage("Desculpe, não consegui gerar uma dica no momento.");
-      } finally {
-        setIsLoading(false);
-      }
-    } else {
-      // General conversational responses
-      const responses = [
-        "Estou aqui para te ajudar com matemática! Tente me dar sua resposta para a equação atual, ou peça uma dica! 😊",
-        "Sinta-se à vontade para me pedir dicas, explicações ou apenas digitar sua resposta para a equação! 📚",
-        "Adoro ajudar com matemática! O que você gostaria de saber sobre a resolução desta equação? 🤔",
-        "Você pode digitar sua resposta numérica ou me fazer perguntas sobre o problema! 💭"
-      ];
-      const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-      addSystemMessage(randomResponse);
+    } catch (error) {
+      console.error("Error processing chat message:", error);
+      addErrorMessage("Desculpe, não consegui processar sua solicitação. Por favor, tente novamente.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -154,9 +130,7 @@ const MathTutor = () => {
     } else {
       setIsCorrect(false);
       setStreak(0);
-      addSystemMessage(`❌ Não está certo. A resposta correta é ${currentEquation.variable} = ${currentEquation.answer}.
-
-Não se preocupe! Aprender com os erros faz parte do processo. Tente novamente! 💪`);
+      addSystemMessage(`❌ Não está certo. Não se preocupe! Aprender com os erros faz parte do processo. Tente novamente! 💪`);
     }
   };
 

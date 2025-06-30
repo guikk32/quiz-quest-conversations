@@ -14,6 +14,7 @@ from langchain_core.prompts import PromptTemplate
 from llama_cpp import Llama
 from dotenv import load_dotenv
 import os
+from tools import get_equation_step_by_step, show_the_solution
 
 load_dotenv()
 
@@ -27,7 +28,7 @@ Você é um sistema especialista em equações de primeiro grau. Considere os se
 
 Sua tarefa é fornecer uma dica útil para o aluno resolver a equação, baseando-se nesses passos, mas sem revelar a resposta final. A dica deve ser natural e auxiliar o aluno a progredir.
 
-Se a mensagem do usuário for um pedido de dica, forneça uma dica. Caso contrário, forneça a solução passo a passo.
+Se a mensagem do usuário for um pedido de dica, forneça uma dica. Caso contrário, forneça a solução passo a passo em formato LaTeX, com quebras de linha para cada passo. Certifique-se de que todo o conteúdo LaTeX esteja entre cifrões ($).
 
 Mensagem do usuário: {user_message}
 """
@@ -36,7 +37,7 @@ EXTRACT_EQUATION_PROMPT = """
 Você é um sistema especialista em equações de primeiro grau.
 Abaixo está a mensagem de um aluno. Sua tarefa é:
 
-Identificar e extrair apenas a equação de primeiro grau contida na mensagem.
+Identificar e extrair a equação de primeiro grau contida na mensagem. Se houver várias equações, extraia a mais relevante. Se não houver uma equação clara, retorne uma string vazia.
 
 Use ponto (.) como separador decimal — não use vírgulas.
 
@@ -44,6 +45,21 @@ Não adicione explicações, comentários ou qualquer texto além da equação.
 
 Mensagem do aluno:
 {user_message}
+"""
+
+INTENT_CLASSIFICATION_PROMPT = """
+Classifique a intenção do usuário com base na seguinte mensagem:
+
+Mensagem: {user_message}
+
+Opções de intenção:
+- HINT: O usuário está pedindo uma dica.
+- EXPLAIN_STEP: O usuário está pedindo uma explicação passo a passo.
+- SOLVE_EQUATION: O usuário está pedindo a solução final da equação.
+- ANSWER_SUBMISSION: O usuário está enviando uma resposta para a equação atual.
+- OTHER: A intenção do usuário não se encaixa nas categorias acima.
+
+Retorne apenas a palavra-chave da intenção (ex: HINT, EXPLAIN_STEP, SOLVE_EQUATION, ANSWER_SUBMISSION, OTHER).
 """
 
 import sympy
@@ -77,31 +93,59 @@ async def extract_equations(user_message: str):
     chain = prompt_template | model
 
     full_response = ""
-    response = chain.astream({"user_message": user_message})
-    async for token in response:
-        full_response += token.content
-    return full_response
+    response = chain.invoke({"user_message": user_message})
+    return response.content
     
 async def extract_and_solve(user_message: str):
     model = ChatOllama(model=MODEL_NAME)
 
-    prompt_template_extract = PromptTemplate.from_template(EXTRACT_EQUATION_PROMPT)
-    chain_extract = prompt_template_extract | model
-    response_extract = chain_extract.invoke({"user_message": user_message})
-    
-    prompt_template_solve = PromptTemplate.from_template(REWRITE_STEPS_PROMPT)
-    chain_solve = prompt_template_solve | model
+    # Classify user intent
+    prompt_template_intent = PromptTemplate.from_template(INTENT_CLASSIFICATION_PROMPT)
+    chain_intent = prompt_template_intent | model
+    intent_response = chain_intent.invoke({"user_message": user_message})
+    user_intent = intent_response.content.strip().upper()
+    print(f"User intent: {user_intent}")
 
-    full_response = ""
-    response = chain_solve.astream({"mathsteps": solve_equation_with_sympy(response_extract.content), "user_message": user_message})
-    
-    async for token in response:
-        full_response += token.content
-    
-    # Store the question and solution in history
-    solved_problems_history.append({"question": user_message, "solution": full_response})
-    
-    return full_response
+    if user_intent == "HINT":
+        prompt_template_solve = PromptTemplate.from_template(REWRITE_STEPS_PROMPT)
+        chain_solve = prompt_template_solve | model
+        equation_content = await extract_equations(user_message)
+        full_response = ""
+        response = chain_solve.astream({"mathsteps": solve_equation_with_sympy(equation_content), "user_message": user_message})
+        async for token in response:
+            full_response += token.content
+        return full_response
+    elif user_intent == "EXPLAIN_STEP":
+        equation_content = await extract_equations(user_message)
+        if not equation_content:
+            return "Não consegui encontrar uma equação na sua mensagem para explicar passo a passo. Por favor, forneça a equação."
+        return get_equation_step_by_step(equation_content)
+    elif user_intent == "SOLVE_EQUATION":
+        equation_content = await extract_equations(user_message)
+        if not equation_content:
+            return "Não consegui encontrar uma equação na sua mensagem para resolver. Por favor, forneça a equação."
+        return show_the_solution(equation_content)
+    elif user_intent == "ANSWER_SUBMISSION":
+        # This case is handled on the frontend, so we don't need to do anything here
+        return ""
+    else: # OTHER or any unhandled intent
+        equation_content = await extract_equations(user_message)
+        if not equation_content:
+            return "Não consegui encontrar uma equação na sua mensagem. Por favor, forneça a equação ou peça uma dica."
+        
+        prompt_template_solve = PromptTemplate.from_template(REWRITE_STEPS_PROMPT)
+        chain_solve = prompt_template_solve | model
+
+        full_response = ""
+        response = chain_solve.astream({"mathsteps": solve_equation_with_sympy(equation_content), "user_message": user_message})
+        
+        async for token in response:
+            full_response += token.content
+        
+        # Store the question and solution in history
+        solved_problems_history.append({"question": user_message, "solution": full_response})
+        
+        return full_response
     
 
 app = FastAPI()
@@ -145,7 +189,9 @@ def generate_equation_sympy(retry_count=5):
         lhs = sympy.sympify(f"{a}*x + {b}")
         rhs = sympy.sympify(f"{c}*x + {d}")
         equation_sympy = sympy.Eq(lhs, rhs)
+        print(f"Generated equation: {equation_sympy}")
         solution = sympy.solve(equation_sympy, x)
+        print(f"SymPy solution: {solution}")
         
         if solution and len(solution) > 0:
             # Convert sympy number to float
@@ -153,12 +199,13 @@ def generate_equation_sympy(retry_count=5):
             return {"equation": equation_str, "answer": ans, "variable": "x"}
         else:
             # Handle cases with no solution or infinite solutions
+            print(f"No unique solution found for {equation_sympy}. Retrying...")
             if retry_count > 0:
                 return generate_equation_sympy(retry_count - 1)
             else:
                 raise Exception("Failed to generate a unique solvable equation after multiple retries.")
     except Exception as e:
-        print(f"Error generating equation: {e}")
+        print(f"Error solving equation: {e}")
         if retry_count > 0:
             return generate_equation_sympy(retry_count - 1)
         else:
@@ -167,7 +214,7 @@ def generate_equation_sympy(retry_count=5):
 @app.post("/solve_equation")
 async def solve_equation_endpoint(request: EquationRequest):
     solution = await extract_and_solve(request.user_message)
-    return {"solution": solution}
+    return {"solution": solution, "intent": user_intent}
 
 @app.get("/history")
 async def get_history():
