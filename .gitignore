@@ -208,3 +208,6 @@ __marimo__/
 
 # LLM Models
 models/
+
+# ext/js is no longer needed
+ext/js/

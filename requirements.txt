@@ -1,6 +1,9 @@
 langchain
-dotenv
+python-dotenv
 langchain-community
+sympy
 langchain-ollama
 llama-cpp-python
 huggingface-hub
+fastapi
+uvicorn
