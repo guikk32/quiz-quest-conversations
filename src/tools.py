@@ -1,5 +1,5 @@
 from langchain_core.tools import tool
-from app import solve_equation_with_sympy
+from .math_utils import solve_equation_with_sympy
 
 @tool
 def evaluate_equation(equation: str):
@@ -26,7 +26,7 @@ def get_equation_step_by_step(equation: str):
     solution = solve_equation_with_sympy(equation)
     # In a real scenario, sympy might provide more detailed steps.
     # For now, we'll simulate steps and rely on LLM for natural language explanation.
-    return f"$Para resolver a equação {equation}, siga estes passos: Primeiro, simplifique ambos os lados. Em seguida, isole a variável 'x'. A solução final é x = {solution[0] if solution else 'N/A'}.$"
+    return f"Para resolver a equação {equation}, siga estes passos: Primeiro, simplifique ambos os lados. Em seguida, isole a variável 'x'. A solução final é x = {solution[0] if solution else 'N/A'}."
 
 @tool
 def show_the_solution(equation: str):
@@ -39,4 +39,4 @@ def show_the_solution(equation: str):
         str: The final solution for the equation.
     """
     solution = solve_equation_with_sympy(equation)
-    return f"$A solução para a equação {equation} é x = {solution[0] if solution else 'N/A'}.$"
+    return f"A solução para a equação {equation} é x = {solution[0] if solution else 'N/A'}."

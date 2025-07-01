@@ -18,7 +18,7 @@ const Problems = () => {
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const response = await axios.get('http://localhost:8000/history');
+        const response = await axios.get('http://192.168.0.103:8000/history');
         setSolvedProblems(response.data);
       } catch (error) {
         console.error("Erro ao buscar histórico:", error);
@@ -103,8 +103,7 @@ const Problems = () => {
                   </div>
                   <div className="mt-3 text-sm md:text-base text-gray-700 whitespace-pre-wrap">
                     Solução:{" "}
-                   {problem.solution.match(/[
-=\^_{\}]+/) ? (
+                   {problem.solution.match(/[=\^_{\}]+/) ? (
                     <span className="block w-full"
                      dangerouslySetInnerHTML={{
                     __html: katex.renderToString(problem.solution, {

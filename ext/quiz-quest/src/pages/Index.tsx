@@ -1,8 +1,8 @@
 
-import MathTutor from "@/components/MathTutor";
+import EquationTutor from "@/components/EquationTutor";
 
 const Index = () => {
-  return <MathTutor />;
+  return <EquationTutor />;
 };
 
 export default Index;

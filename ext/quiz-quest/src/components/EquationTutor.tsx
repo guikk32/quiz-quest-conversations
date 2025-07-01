@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,13 +16,13 @@ interface Equation {
   variable: string;
 }
 
-const MathTutor = () => {
+const EquationTutor = () => {
   const [currentEquation, setCurrentEquation] = useState<Equation | null>(null);
   const [userAnswer, setUserAnswer] = useState("");
   const [points, setPoints] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   
-  const [messages, setMessages] = useState<Array<{type: 'system' | 'user' | 'hint' | 'explain_step' | 'solve_equation' | 'error', content: string, timestamp: Date}>>([]);
+  const [messages, setMessages] = useState<Array<{type: 'system' | 'user' | 'hint' | "explain_step" | "solve_equation" | 'error', content: string, timestamp: Date}>>([]);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [streak, setStreak] = useState(0);
 
@@ -34,17 +33,19 @@ const MathTutor = () => {
 
   const generateNewEquation = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/generate_equation');
+      const response = await axios.get('http://192.168.0.103:8000/generate_equation');
       const equation = response.data;
       setCurrentEquation(equation);
       setUserAnswer("");
       
       setIsCorrect(null);
-      addSystemMessage(`Aqui está sua próxima equação para resolver: **${equation.equation}**\n\nEncontre o valor de ${equation.variable}. Você pode digitar sua resposta ou me pedir ajuda!`);
+      addSystemMessage(`Aqui está sua próxima equação para resolver: **${equation.equation}**
+
+Encontre o valor de ${equation.variable}. Você pode digitar sua resposta ou me pedir ajuda!`);
     } catch (error) {
       console.error("Error generating new equation:", error);
       if (axios.isAxiosError(error) && error.response && error.response.data && error.response.data.detail) {
-        addErrorMessage(`Erro ao gerar equação: ${error.response.data.detail}`);
+        addErrorMessage(`Error generating equation: ${error.response.data.detail}`);
       } else {
         addErrorMessage("Desculpe, não consegui gerar uma nova equação no momento. Por favor, tente novamente mais tarde.");
       }
@@ -84,8 +85,10 @@ const MathTutor = () => {
     setIsLoading(true);
     addSystemMessage("Pensando...");
     try {
-      const response = await axios.post('http://localhost:8000/solve_equation', { user_message: message });
+      const response = await axios.post('http://192.168.0.103:8000/solve_equation', { user_message: message });
+      console.log("Backend response data:", response.data);
       const solutionContent = response.data.solution;
+      console.log("Solution content:", solutionContent);
       const intent = response.data.intent;
 
       if (intent === "HINT") {
@@ -120,9 +123,7 @@ const MathTutor = () => {
       
       let message = `🎉 Excelente! Está correto! Você ganhou ${totalPoints} pontos!`;      if (bonusPoints > 0) message += ` (+${bonusPoints} bônus por poucas dicas)`;
       if (streakBonus > 0) message += ` (+${streakBonus} bônus de sequência)`;
-      message += `
-
-Ótimo trabalho! Pronto para o próximo desafio? 🚀`;
+      message += `\n\nÓtimo trabalho! Pronto para o próximo desafio? 🚀`;
       
       setTimeout(() => {
         generateNewEquation();
@@ -153,8 +154,8 @@ const MathTutor = () => {
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="text-center mb-8">
         <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent mb-2">
-          Tutor de Matemática: Equações de Primeiro Grau
-        </h1>
+            Tutor de Matemática: Equações de Primeiro Grau
+          </h1>
         <p className="text-gray-600">Domine equações lineares através de aprendizado interativo!</p>
       </div>
 
@@ -264,4 +265,4 @@ const MathTutor = () => {
   );
 };
 
-export default MathTutor;
+export default EquationTutor;
