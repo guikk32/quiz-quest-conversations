@@ -211,3 +211,6 @@ models/
 
 # ext/js is no longer needed
 ext/js/
+
+# Ignored files
+Screenshot from 2025-06-30 20-55-32.png
